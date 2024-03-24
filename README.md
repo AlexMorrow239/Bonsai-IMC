@@ -2,7 +2,7 @@
 Library of trading algorithms for Prosperity IMC
 
 ## Branch Creation
-When Creating you're branch at a CODEOWNERS file with one line formatted like this:
+When Creating you're branch, add a CODEOWNERS file with one line formatted like this:
 
 `* @github-username`
 
