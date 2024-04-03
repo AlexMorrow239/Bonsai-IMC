@@ -43,8 +43,10 @@ class Trader:
         The order book imbalance is calculated as the difference between the total buy volume and the total sell volume,
         divided by the total volume. If the total volume is zero, the imbalance is set to zero to prevent division by zero.
         """
-        total_buy_volume = sum(-amount for amount in order_depth.buy_orders.values())
-        total_sell_volume = sum(-amount for amount in order_depth.sell_orders.values())
+        total_buy_volume = sum(amount for price, amount in order_depth.buy_orders.items())
+        print("Total buy volume: ", total_buy_volume)
+        total_sell_volume = sum(-amount for price, amount in order_depth.sell_orders.items())
+        print("Total sell volume: ", total_sell_volume)
         total_volume = total_buy_volume + total_sell_volume
         if total_volume == 0:  # Prevent division by zero
             return 0
@@ -55,6 +57,7 @@ class Trader:
 
         SHORT_TERM_WINDOW = 5
         LONG_TERM_WINDOW = 25
+        IMBALANCE_THRESHOLD = 0.9   # Threshold for order book imbalance
 
         # Deserialize traderData to get the trader state
         if state.traderData:
@@ -68,8 +71,9 @@ class Trader:
         result = {}
         for product, order_depth in state.order_depths.items():
             # Initialize product history
-            if product not in self.prices_history:
-                self.prices_history[product] = []
+            if product not in self.bid_prices_history:
+                self.bid_prices_history[product] = []
+                self.ask_prices_history[product] = []
                 self.position_open[product] = False
                 self.position_type[product] = None
 
@@ -94,21 +98,25 @@ class Trader:
                         orders.append(Order(product, best_bid, -1)) # Close long position
                         self.position_open[product] = False
                         self.position_type[product] = None
+                        print("Long position closed for product: ", product, " at price: ", best_bid)
                     elif pType == 'short' and ask_short_term_ma > ask_long_term_ma:
                         orders.append(Order(product, best_ask, 1))  # Close short position
                         self.position_open[product] = False
                         self.position_type[product] = None
+                        print("Short position closed for product: ", product, " at price: ", best_ask)
 
                 elif not self.position_open[product]:
 
-                    if ask_short_term_ma > ask_long_term_ma and imbalance > 0.5:  # Anticipate upward movement, long signal
+                    if ask_short_term_ma > ask_long_term_ma and imbalance > IMBALANCE_THRESHOLD:  # Anticipate upward movement, long signal
                         orders.append(Order(product, best_ask, 1))
                         self.position_open[product] = True
                         self.position_type[product] = 'long'
-                    elif bid_short_term_ma < bid_long_term_ma and imbalance < -0.5:  # Anticipate downward movement, short signal
+                        print("Long signal detected for product: ", product, " at price: ", best_ask, " with imbalance: ", imbalance)
+                    elif bid_short_term_ma < bid_long_term_ma and imbalance < -IMBALANCE_THRESHOLD:  # Anticipate downward movement, short signal
                         orders.append(Order(product, best_bid, -1))
                         self.position_open[product] = True
                         self.position_type[product] = 'short'
+                        print("Short signal detected for product: ", product, " at price: ", best_bid, " with imbalance: ", imbalance)
 
             result[product] = orders
         
