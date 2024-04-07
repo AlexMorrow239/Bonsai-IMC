@@ -7,8 +7,8 @@ from typing import List
 class Trader:
     def __init__(self):
         # Constants
-        self.am_std_multiplier = 1.8
-        self.am_window_size = 34
+        # self.am_std_multiplier = 1.8
+        # self.am_window_size = 34
         self.star_std_multiplier = 1.6
         self.star_window_size = 37
         # Variables
@@ -19,14 +19,6 @@ class Trader:
         self.star_open_order_volume = 0
         self.star_partially_closed = False
         self.star_latest_price = 0
-        self.am_position_open = False
-        self.am_position_type = None
-        self.am_historical_bid_prices = []
-        self.am_historical_ask_prices = []
-        self.am_remaining_quantity = 0
-        self.am_open_order_volume = 0
-        self.am_partially_closed = False
-        self.am_latest_price = 0
 
         # Alex added these
         self.star_just_opened = False
@@ -39,8 +31,8 @@ class Trader:
         if state.traderData:
             saved_state = jsonpickle.decode(state.traderData)
             # Constants
-            self.am_std_multiplier = saved_state.am_std_multiplier
-            self.am_window_size = saved_state.am_window_size
+            # self.am_std_multiplier = saved_state.am_std_multiplier
+            # self.am_window_size = saved_state.am_window_size
             self.star_std_multiplier = saved_state.star_std_multiplier
             self.star_window_size = saved_state.star_window_size
 
@@ -52,14 +44,6 @@ class Trader:
             self.star_open_order_volume = saved_state.star_open_order_volume
             self.star_partially_closed = saved_state.star_partially_closed
             self.star_latest_price = saved_state.star_latest_price
-            self.am_position_open = saved_state.am_position_open
-            self.am_position_type = saved_state.am_position_type
-            self.am_remaining_quantity = saved_state.am_remaining_quantity
-            self.am_historical_bid_prices = saved_state.am_historical_bid_prices
-            self.am_historical_ask_prices = saved_state.am_historical_ask_prices
-            self.am_open_order_volume = saved_state.am_open_order_volume
-            self.am_partially_closed = saved_state.am_partially_closed
-            self.am_latest_price = saved_state.am_latest_price
 
             # Alex added these
             self.star_just_opened = saved_state.star_just_opened
@@ -68,9 +52,6 @@ class Trader:
         print(len(self.star_historical_bid_prices))
         print(len(self.star_historical_ask_prices))
         print('star open' if self.star_position_open else 'star closed')
-        print(len(self.am_historical_bid_prices))
-        print(len(self.am_historical_ask_prices))
-        print('am open' if self.am_position_open else 'am closed')
         print('Position: ', state.position)
 #--------------------------------------------------------------------------------------------------------------
         result = {}
@@ -80,11 +61,11 @@ class Trader:
         if 'STARFRUIT' in state.order_depths:
             star_order_depth = state.order_depths['STARFRUIT']
             star_orders = []
-            star_position = state.position['STARFRUIT']
+            star_position = state.position.get('STARFRUIT', 0)
 
             # Get the total position of STARFRUIT
             if self.star_just_opened:
-                self.star_initial_position += star_position
+                self.star_initial_position = star_position
                 self.star_just_opened = False
 
             # Check if the position has been closed
@@ -180,7 +161,7 @@ class Trader:
                         star_orders.append(Order('STARFRUIT', star_live_ask_price, star_additional_volume))
                         
                         print("additional long position")
-                        self.star_initial_position += star_additional_volume # Add to the initial position
+                        self.star_just_opened = True
                         self.star_position_open = True
                         self.star_position_type = 'Long'
                     
