@@ -143,7 +143,7 @@ class Trader:
                         # If there is not enough volume to open the position, create a second order at new price
                         if self.star_open_order_volume < 20 and star_ask_price_2:   # Check if there is a second ask price
                             open_order_volume_2 = 20 - self.star_open_order_volume
-                            open_order_price_2 = (star_live_ask_price - star_ask_price_2) / 2
+                            open_order_price_2 = int((star_live_ask_price - star_ask_price_2) / 2)
                             star_orders.append(Order('STARFRUIT', open_order_price_2, open_order_volume_2))
                             print("star open second lower")
 
@@ -152,66 +152,65 @@ class Trader:
                         self.star_position_open = True
                         self.star_position_type = 'Long'
                         self.star_just_opened = True
-                        
-                # If the position has not received a closing signal, check if the position can be added to
-                elif self.star_position_open and not self.star_partially_closed:
 
-                    if self.star_position_type == 'Long' and star_live_ask_price < star_latest_lower_band:
-                        star_additional_volume = min((20 - star_position), abs(star_live_ask_volume))
-                        star_orders.append(Order('STARFRUIT', star_live_ask_price, star_additional_volume))
-                        
-                        print("additional long position")
-                        self.star_just_opened = True
-                        self.star_position_open = True
-                        self.star_position_type = 'Long'
+                # If position has been opened, check if the position can be closed
+                elif self.star_position_open:                    
                     
-                    elif self.star_position_type == 'Short' and star_live_bid_price > star_latest_upper_band:
-                        star_additional_volume = min(abs(20-star_position), abs(star_live_bid_volume))
-                        star_orders.append(Order('STARFRUIT', star_live_bid_price, -star_additional_volume))
-                        
-                        print("additional short position")
-                        self.star_initial_position += star_additional_volume # Add to the initial position
-                        self.star_position_open = True
-                        self.star_position_type = 'Short'
-
-                # If the position has received a closing signal, continue to close the position
-                elif self.star_position_open and self.star_partially_closed:
-                    
+                    # Conditions for closing long and short positions
                     if self.star_position_type == 'Short' and star_live_ask_price < star_latest_lower_band:
-
                         star_closing_volume = min(abs(star_position), abs(star_live_ask_volume)) # Caps volume to the position size
                         star_orders.append(Order('STARFRUIT', star_live_ask_price, star_closing_volume))
+                        self.star_partially_closed = True
                     
                     elif self.star_position_type == 'Long' and star_live_bid_price > star_latest_upper_band:
                         star_closing_volume = min(abs(star_position), abs(star_live_bid_volume)) # Caps volume to the position size
                         star_orders.append(Order('STARFRUIT', star_live_bid_price, -star_closing_volume))
+                        self.star_partially_closed = True
                         
                         # If there wasnt enough volume to close the position, create a second order at new price
                         if (star_position - star_closing_volume) > 0 and star_bid_price_2:
-
                             # Calculate favorble price and quantity for second order
                             star_order_quantity_2 = star_position - star_closing_volume
-                            star_order_price_2 = (star_live_bid_price - star_bid_price_2) / 2
+                            star_order_price_2 = int((star_live_bid_price - star_bid_price_2) / 2)
                             star_orders.append(Order('STARFRUIT', star_order_price_2, -star_order_quantity_2))
+        
+                    # If the position has not received a closing signal, check if the position can be added to
+                    if not self.star_partially_closed:
 
-                    # If star is partially closed, continue to close the position
-                    elif self.star_partially_closed:
+                        if self.star_position_type == 'Long' and star_live_ask_price < star_latest_lower_band:
+                            star_additional_volume = min((20 - star_position), abs(star_live_ask_volume))
+                            star_orders.append(Order('STARFRUIT', star_live_ask_price, star_additional_volume))
+                            
+                            print("additional long position")
+                            self.star_just_opened = True
+                            self.star_position_open = True
+                            self.star_position_type = 'Long'
                         
-                        # Short position
-                        if self.star_position_type == 'Short' and (star_live_ask_price < star_latest_lower_band or star_live_ask_price < self.star_latest_price):
-                            star_order_quantity = min(abs(star_position), abs(star_live_ask_volume))
-                            star_orders.append(Order('STARFRUIT', star_live_ask_price, star_order_quantity))
+                        elif self.star_position_type == 'Short' and star_live_bid_price > star_latest_upper_band and star_position != 20:
+                            star_additional_volume = min((20 - abs(star_position)), abs(star_live_bid_volume))
+                            star_orders.append(Order('STARFRUIT', star_live_bid_price, -star_additional_volume))
+                            
+                            print("additional short position")
+                            self.star_just_opened = True
+                            self.star_position_open = True
+                            self.star_position_type = 'Short'
 
-                        # Long position
-                        elif self.star_position_type == 'Long' and (star_live_bid_price > star_latest_upper_band or star_live_bid_price > self.star_latest_price):
-                            star_order_quantity = min(abs(star_position), abs(star_live_bid_volume))
-                            star_orders.append(Order('STARFRUIT', star_live_bid_price, -star_order_quantity))
+                    # Continue to close position if partially closed
+                    elif self.star_partially_closed and len(star_orders) == 0:
+                        if self.star_position_type == 'Short':
+                            star_open_order_volume = min(abs(star_live_bid_volume), star_position)
+                            star_orders.append(Order('STARFRUIT', star_live_ask_price, -star_open_order_volume))
+                            print("star closing short")
+                        elif self.star_position_type == 'Long':
+                            star_open_order_volume = min(abs(star_live_ask_volume), star_position)
+                            star_orders.append(Order('STARFRUIT', star_live_bid_price, star_open_order_volume))
 
-                            # If there wasnt enough volume to close the position, create a second order at new price
-                            if (star_position - star_order_quantity) > 0 and star_bid_price_2:  # Check if there is a second bid price
-                                star_order_quantity_2 = star_position - star_order_quantity
-                                star_order_price_2 = (star_live_bid_price - star_bid_price_2) / 2
-                                star_orders.append(Order('STARFRUIT', star_order_price_2, -star_order_quantity_2))
+                            if self.star_open_order_volume < star_position and star_ask_price_2:
+                                open_order_volume_2 = star_position - self.star_open_order_volume
+                                open_order_price_2 = int((star_live_ask_price - star_ask_price_2) / 2)
+                                star_orders.append(Order('STARFRUIT', open_order_price_2, open_order_volume_2))
+                                print("star closing long with 2nd order")
+                            print("star closing long")
 
             result['STARFRUIT'] = star_orders
             traderData = jsonpickle.encode(self)
