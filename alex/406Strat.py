@@ -109,13 +109,13 @@ class Trader:
 
             # Get the second highest bid price and volume
             if len(star_order_depth.buy_orders) > 1:
-                star_bid_price_2 = sorted(star_order_depth.buy_orders, reverse=True)[1]
+                star_bid_price_2 = sorted(star_order_depth.buy_orders, reverse=True)[1] # Sort by key in descending order
             else:
                 star_bid_price_2 = None
 
             # Get the second lowest ask price and volume
             if len(star_order_depth.sell_orders) > 1:
-                star_ask_price_2 = sorted(star_order_depth.sell_orders)[1]
+                star_ask_price_2 = sorted(star_order_depth.sell_orders)[1] # Sort by key in ascending order
             else:
                 star_ask_price_2 = None
 
