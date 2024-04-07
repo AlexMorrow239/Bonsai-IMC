@@ -84,15 +84,19 @@ class Trader:
 
             # Get the total position of STARFRUIT
             if self.star_just_opened:
-                self.star_initial_position = star_position
+                self.star_initial_position += star_position
                 self.star_just_opened = False
 
             # Check if the position has been closed
             if star_position == 0:
+                self.star_initial_position = 0
                 self.star_position_open = False
                 self.star_partially_closed = False
             # Check if the position has been partially closed
-            elif self.star_initial_position > star_position:
+            elif self.star_position_open and self.star_position_type == 'Long' and self.star_initial_position > star_position:
+                self.star_position_open = True
+                self.star_partially_closed = True
+            elif self.star_position_open and self.star_position_type == 'Short' and self.star_initial_position < star_position:
                 self.star_position_open = True
                 self.star_partially_closed = True
 
