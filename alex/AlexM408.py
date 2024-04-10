@@ -37,6 +37,15 @@ class Trader:
         if 'AMETHYSTS' in state.order_depths:
             am_order_depth = state.order_depths['AMETHYSTS']
             am_orders = []
+            am_position = state.position.get('AMETHYSTS', 0)
+
+            if am_position == 0:
+                self.am_position_open = False
+                self.am_position_type = None
+                self.am_remaining_quantity = 0
+                self.am_open_order_volume = 0
+                self.am_partially_closed = False
+                self.am_latest_price = 0
 
             if am_order_depth.buy_orders and am_order_depth.sell_orders:
                 am_bid_price = max(am_order_depth.buy_orders)
@@ -79,7 +88,7 @@ class Trader:
                             open_order_quant_2 = 20 - self.am_open_order_volume
                             am_orders.append(Order('AMETHYSTS', (am_live_bid_price + 1), -open_order_quant_2))
                             print("am open upper 2")
-                            
+
                     elif am_live_ask_price < am_latest_lower_band:
                         self.am_open_order_volume = min(abs(am_live_ask_volume), 10)
                         am_orders.append(Order('AMETHYSTS', am_live_ask_price, self.am_open_order_volume))
@@ -103,6 +112,12 @@ class Trader:
                             print("additional long position")
                             self.am_position_open = True
                             self.am_position_type = 'Long'
+
+                            if am_position + am_additional_volume < 20:
+                                open_order_quant_2 = 20 - (am_position + am_additional_volume)
+                                am_orders.append(Order('AMETHYSTS', (am_live_ask_price - 1), open_order_quant_2))
+                                print("additional long position 2")
+                            
                         elif self.am_position_type == 'Short' and am_live_bid_price > am_latest_upper_band:
                             am_additional_volume = min(abs(20-self.am_open_order_volume), abs(am_live_bid_volume))
                             am_orders.append(Order('AMETHYSTS', am_live_bid_price, -am_additional_volume))
@@ -110,12 +125,19 @@ class Trader:
                             print("additional short position")
                             self.am_position_open = True
                             self.am_position_type = 'Short'
+
+                            if abs(am_position) + am_additional_volume < 20:
+                                open_order_quant_2 = 20 - (abs(am_position) + am_additional_volume)
+                                am_orders.append(Order('AMETHYSTS', (am_live_bid_price + 1), -open_order_quant_2))
+                                print("additional short position 2")
+
                         if self.am_position_type == 'Short' and (am_live_ask_price < am_latest_lower_band or am_live_ask_price < self.am_latest_price):
                             am_closing_volume = min(abs(self.am_open_order_volume), abs(am_live_ask_volume))
                             am_orders.append(Order('AMETHYSTS', am_live_ask_price, am_closing_volume))
                             self.am_remaining_quantity -= am_closing_volume
                             if self.am_remaining_quantity > 0:
-                                print("am partial close upper")
+                                am_orders.append(Order('AMETHYSTS', (am_live_ask_price - 1), self.am_remaining_quantity))
+                                print("am custom order close upper")
                                 self.am_partially_closed = True
                                 self.am_position_open = True
                                 self.am_position_type = 'Short'
@@ -123,12 +145,14 @@ class Trader:
                                 print("am full close upper")
                                 self.am_position_open = False
                                 self.am_partially_closed = False
+                        
                         elif self.am_position_type == 'Long' and (am_live_bid_price > am_latest_upper_band or am_live_bid_price > self.am_latest_price):
                             am_closing_volume = min(abs(self.am_open_order_volume), abs(am_live_bid_volume))
                             am_orders.append(Order('AMETHYSTS', am_live_bid_price, -am_closing_volume))
                             self.am_remaining_quantity -= am_closing_volume
                             if self.am_remaining_quantity > 0:
-                                print("am partial close lower")
+                                am_orders.append(Order('AMETHYSTS', (am_live_bid_price + 1), -self.am_remaining_quantity))
+                                print("am custom order close lower")
                                 self.am_partially_closed = True
                                 self.am_position_open = True
                                 self.am_position_type = 'Long'
@@ -142,6 +166,7 @@ class Trader:
                             am_orders.append(Order('AMETHYSTS', am_live_ask_price, am_order_quantity))
                             self.am_remaining_quantity -= am_order_quantity
                             if self.am_remaining_quantity > 0:
+                                am_orders.append(Order('AMETHYSTS', (am_live_ask_price - 1), self.am_remaining_quantity))
                                 self.am_partially_closed = True
                                 self.am_position_open = True
                                 self.am_position_type = 'Short'
@@ -153,6 +178,7 @@ class Trader:
                             am_orders.append(Order('AMETHYSTS', am_live_bid_price, -am_order_quantity))
                             self.am_remaining_quantity -= am_order_quantity
                             if self.am_remaining_quantity > 0:
+                                am_orders.append(Order('AMETHYSTS', (am_live_bid_price + 1), -self.am_remaining_quantity))
                                 self.am_partially_closed = True
                                 self.am_position_open = True
                                 self.am_position_type = 'Long'
