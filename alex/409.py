@@ -45,9 +45,10 @@ class Trader:
 
         # next_price = (coef[0] * self.star_cache[-1]) + (coef[1] * self.star_cache[-2]) + (coef[2] * self.star_cache[-3]) + (coef[3] * self.star_cache[-4]) + intercept
         # next_price = (coef[0] * self.star_cache[0]) + (coef[1] * self.star_cache[1]) + (coef[2] * self.star_cache[2]) + (coef[3] * self.star_cache[3]) + intercept
+        t_delta = 100
+        # next_price = (a * self.star_cache[3]**4) + (b * self.star_cache[3]**3) + (c * self.star_cache[3]**2) + (d * self.star_cache[3]) + intercept
+        next_price = (a * t_delta**4) + (b * t_delta**3) + (c * t_delta**2) + (d * t_delta) + intercept
 
-        next_price = (a * self.star_cache[3]**4) + (b * self.star_cache[3]**3) + (c * self.star_cache[3]**2) + (d * self.star_cache[3]) + intercept
-        
         return int(round(next_price))
     
     def create_orders_regression(self, product, order_depth, acc_bid, acc_ask, LIMIT):
