@@ -15,8 +15,8 @@ class Trader:
     def __init__ (self):
         self.position = copy.deepcopy({'STARFRUIT': 0, 'AMETHYSTS': 0})
         self.star_cache = []
-        self.star_poly_order = 12
-        self.SMOOTHING = 0.95
+        self.star_poly_order = 8
+        self.SMOOTHING = 0.98
     
     def filter(self, z: List) -> List:
             z_doubled = z
@@ -48,7 +48,7 @@ class Trader:
         
         # next_price = (coef[0] * self.star_cache[-1]) + (coef[1] * self.star_cache[-2]) + (coef[2] * self.star_cache[-3]) + (coef[3] * self.star_cache[-4]) + intercept
         # next_price = (coef[0] * self.star_cache[0]) + (coef[1] * self.star_cache[1]) + (coef[2] * self.star_cache[2]) + (coef[3] * self.star_cache[3]) + intercept
-        t = len(self.star_cache) + 3
+        t = len(self.star_cache) + self.star_poly_order/4
         next_price = (a * t**4) + (b * t**3) + (c * t**2) + (d * t) + intercept
         
         return int(round(next_price))
