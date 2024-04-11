@@ -14,6 +14,7 @@ class Trader:
         self.star_cache = []
         self.star_poly_order = 12
         self.SMOOTHING = 0.5
+        self.cpnl = 0
     
     def filter(self, z: List) -> List:
             z_doubled = z
