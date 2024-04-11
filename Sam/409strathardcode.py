@@ -42,21 +42,8 @@ class Trader:
             if am_order_depth.buy_orders and am_order_depth.sell_orders:
                 am_bid_price = max(am_order_depth.buy_orders)
                 self.am_historical_bid_prices.append(am_bid_price)
-                am_ask_price = min(am_order_depth.sell_orders)
 
-            if len(self.am_historical_bid_prices) > 20:
-                am_bid_rolling_mean = pd.Series(self.am_historical_bid_prices).rolling(window=self.am_window_size).mean()
-                am_bid_rolling_std = pd.Series(self.am_historical_bid_prices).rolling(window=self.am_window_size).std()
-                am_upper_band = am_bid_rolling_mean + am_bid_rolling_std.values * 1.6
-
-                am_ask_rolling_mean = pd.Series(self.am_historical_ask_prices).rolling(window=self.am_window_size).mean()
-                am_ask_rolling_std = pd.Series(self.am_historical_ask_prices).rolling(window=self.am_window_size).std()
-                am_lower_band = am_ask_rolling_mean - am_ask_rolling_std.values * 1.6
-
-                am_latest_upper_band = am_upper_band.iloc[-1]
-                print(am_latest_upper_band)
-                am_latest_lower_band = am_lower_band.iloc[-1]
-                print(am_latest_lower_band)
+            if len(self.am_historical_bid_prices) > 34:
 
                 am_live_ask_price, am_live_ask_volume = list(am_order_depth.sell_orders.items())[0]
                 am_live_bid_price, am_live_bid_volume = list(am_order_depth.buy_orders.items())[0]
