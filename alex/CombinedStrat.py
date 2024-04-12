@@ -145,7 +145,7 @@ class Trader:
         am_live_bid_price, am_live_bid_volume = list(am_order_depth.buy_orders.items())[0]
 
         if am_cur_position == 0:
-            if am_live_bid_price > 10000:
+            if am_live_bid_price >= 10000:
                 self.am_open_order_volume = min(abs(am_live_bid_volume)+3, 20)
                 am_orders.append(Order('AMETHYSTS', am_live_bid_price-1, -self.am_open_order_volume))
                 self.am_latest_price = am_live_bid_price
