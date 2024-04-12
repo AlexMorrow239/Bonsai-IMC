@@ -12,11 +12,12 @@ class Trader:
     
     def __init__(self):
         self.position = {'STARFRUIT': 0, 'AMETHYSTS': 0}
+        # STARFRUIT
         self.star_cache = []
         self.star_poly_order = 8
         self.SMOOTHING = 0.98
         self.am_window_size = 34
-
+        # AMETHYSTS
         self.am_remaining_quantity = 0
         self.am_partially_closed = False
         self.am_latest_price = 0
