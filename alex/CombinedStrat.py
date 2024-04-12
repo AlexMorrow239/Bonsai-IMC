@@ -16,9 +16,7 @@ class Trader:
         self.star_poly_order = 8
         self.SMOOTHING = 0.98
         self.am_window_size = 34
-        
-        self.am_historical_bid_prices = []
-        self.am_historical_ask_prices = []
+
         self.am_remaining_quantity = 0
         self.am_partially_closed = False
         self.am_latest_price = 0
@@ -93,8 +91,6 @@ class Trader:
             self.SMOOTHING = saved_state.SMOOTHING
             # AMETHYSTS
             self.am_window_size = saved_state.am_window_size
-            self.am_historical_bid_prices = saved_state.am_historical_bid_prices
-            self.am_historical_ask_prices = saved_state.am_historical_ask_prices
             self.am_remaining_quantity = saved_state.am_remaining_quantity
             self.am_partially_closed = saved_state.am_partially_closed
             self.am_latest_price = saved_state.am_latest_price
