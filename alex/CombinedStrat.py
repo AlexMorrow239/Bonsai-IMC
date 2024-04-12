@@ -74,7 +74,7 @@ class Trader:
                 assert(quantity <= 0)
                 orders.append(Order(product, bid, quantity)) if cum_sell_quant >= -20 else None
         
-        self.position['STARFRUIT'] = cur_position
+        self.position[product] = cur_position
         
         return orders
     
