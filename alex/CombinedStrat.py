@@ -16,10 +16,10 @@ class Trader:
         self.star_poly_order = 8
         self.SMOOTHING = 0.98
         self.am_window_size = 34
+        
         self.am_historical_bid_prices = []
         self.am_historical_ask_prices = []
         self.am_remaining_quantity = 0
-        self.am_open_order_volume = 0
         self.am_partially_closed = False
         self.am_latest_price = 0
     
@@ -96,7 +96,6 @@ class Trader:
             self.am_historical_bid_prices = saved_state.am_historical_bid_prices
             self.am_historical_ask_prices = saved_state.am_historical_ask_prices
             self.am_remaining_quantity = saved_state.am_remaining_quantity
-            self.am_open_order_volume = saved_state.am_open_order_volume
             self.am_partially_closed = saved_state.am_partially_closed
             self.am_latest_price = saved_state.am_latest_price
 
@@ -144,15 +143,15 @@ class Trader:
 
         if am_cur_position == 0:
             if am_live_bid_price >= 10000:
-                self.am_open_order_volume = min(abs(am_live_bid_volume)+3, 20)
-                am_orders.append(Order('AMETHYSTS', am_live_bid_price-1, -self.am_open_order_volume))
+                am_open_order_volume = min(abs(am_live_bid_volume)+3, 20)
+                am_orders.append(Order('AMETHYSTS', am_live_bid_price-1, -am_open_order_volume))
                 self.am_latest_price = am_live_bid_price
-                self.am_remaining_quantity = self.am_open_order_volume
+                self.am_remaining_quantity = am_open_order_volume
             elif am_live_ask_price < 10000:
-                self.am_open_order_volume = min(abs(am_live_ask_volume)+3, 20)
-                am_orders.append(Order('AMETHYSTS', am_live_ask_price+1, self.am_open_order_volume))
+                am_open_order_volume = min(abs(am_live_ask_volume)+3, 20)
+                am_orders.append(Order('AMETHYSTS', am_live_ask_price+1, am_open_order_volume))
                 self.am_latest_price = am_live_ask_price
-                self.am_remaining_quantity = self.am_open_order_volume
+                self.am_remaining_quantity = am_open_order_volume
 
 
 
@@ -230,6 +229,6 @@ class Trader:
                     self.am_latest_price = am_live_bid_price
                     self.am_partially_closed = False
                     self.am_remaining_quantity = (am_order_quantity - self.am_remaining_quantity)
+        
         result['AMETHYSTS'] = am_orders
-            
         return result, conversions, jsonpickle.encode(self)
