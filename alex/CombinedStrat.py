@@ -146,7 +146,7 @@ class Trader:
             am_bid_price = max(am_order_depth.buy_orders)
             self.am_historical_bid_prices.append(am_bid_price)
 
-        if len(self.am_historical_bid_prices) > 20:
+        if state.timestamp > 2000:
 
             am_live_ask_price, am_live_ask_volume = list(am_order_depth.sell_orders.items())[0]
             am_live_bid_price, am_live_bid_volume = list(am_order_depth.buy_orders.items())[0]
