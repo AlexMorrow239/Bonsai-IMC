@@ -14,9 +14,8 @@ class Trader:
         self.position = {'STARFRUIT': 0, 'AMETHYSTS': 0}
         # STARFRUIT
         self.star_cache = []
-        self.star_poly_order = 8
-        self.SMOOTHING = 0.98
-        self.am_window_size = 34
+        self.star_window_size = 8
+        self.SMOOTHING = 0.99
         # AMETHYSTS
         self.am_remaining_quantity = 0
         self.am_partially_closed = False
@@ -43,7 +42,7 @@ class Trader:
         smoothed_star_cache = self.filter(self.star_cache)
         a,b,c,d,intercept = np.polyfit(range(0, len(smoothed_star_cache)), smoothed_star_cache, 4)
         
-        t = len(self.star_cache) + self.star_poly_order/4
+        t = len(self.star_cache) + self.star_window_size/4
         next_price = (a * t**4) + (b * t**3) + (c * t**2) + (d * t) + intercept
         
         return int(round(next_price))
@@ -88,10 +87,9 @@ class Trader:
             # STARFRUIT
             self.position = saved_state.position
             self.star_cache = saved_state.star_cache
-            self.star_poly_order = saved_state.star_poly_order
+            self.star_window_size = saved_state.star_window_size
             self.SMOOTHING = saved_state.SMOOTHING
             # AMETHYSTS
-            self.am_window_size = saved_state.am_window_size
             self.am_remaining_quantity = saved_state.am_remaining_quantity
             self.am_partially_closed = saved_state.am_partially_closed
             self.am_latest_price = saved_state.am_latest_price
@@ -100,7 +98,7 @@ class Trader:
             self.position[product] = state.position.get(product, 0) # Update position
 
         # Ensure coefficients do not exceed 12, remove oldest mid_price if it does
-        if len(self.star_cache) == self.star_poly_order:
+        if len(self.star_cache) == self.star_window_size:
             self.star_cache.pop(0)
 
         # Get the best buy and sell prices
@@ -115,9 +113,9 @@ class Trader:
 
         star = True
         # Use predicted next price to determine acceptable bids and asks
-        if len(self.star_cache) == self.star_poly_order:
-            star_band_lower = self.calc_next_price() - 1
-            star_band_upper = self.calc_next_price() + 1
+        if len(self.star_cache) == self.star_window_size:
+            star_band_lower = self.calc_next_price() - 1.0
+            star_band_upper = self.calc_next_price() + 1.0
 
         else:
             print("Not enough data")
