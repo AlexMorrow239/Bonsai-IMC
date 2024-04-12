@@ -139,7 +139,7 @@ class Trader:
         am_live_bid_price, am_live_bid_volume = list(am_order_depth.buy_orders.items())[0]
 
         if am_cur_position == 0:
-            if am_live_bid_price >= 10000:
+            if am_live_bid_price > 10000:
                 am_open_order_volume = min(abs(am_live_bid_volume)+3, 20)
                 am_orders.append(Order('AMETHYSTS', am_live_bid_price-1, -am_open_order_volume))
                 self.am_latest_price = am_live_bid_price
@@ -153,12 +153,12 @@ class Trader:
         elif am_cur_position != 0 and not self.am_partially_closed:
 
             if am_cur_position > 0 and am_live_ask_price < 10000:
-                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_ask_volume))
-                am_orders.append(Order('AMETHYSTS', am_live_ask_price, am_additional_volume))
+                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_ask_volume)+3)
+                am_orders.append(Order('AMETHYSTS', am_live_ask_price+1, am_additional_volume))
                 self.am_remaining_quantity += am_additional_volume
             elif am_cur_position < 0 and am_live_bid_price > 10000:
-                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_bid_volume))
-                am_orders.append(Order('AMETHYSTS', am_live_bid_price, -am_additional_volume))
+                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_bid_volume)+3)
+                am_orders.append(Order('AMETHYSTS', am_live_bid_price-1, -am_additional_volume))
                 self.am_remaining_quantity += am_additional_volume
             if am_cur_position < 0 and (am_live_ask_price < 10000 or am_live_ask_price < self.am_latest_price):
                 am_closing_volume = min(abs(am_live_ask_volume)+3, 20+self.am_remaining_quantity)
@@ -190,12 +190,12 @@ class Trader:
                         
         elif am_cur_position != 0 and self.am_partially_closed:
             if am_cur_position > 0 and am_live_ask_price < 10000:
-                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_ask_volume))
-                am_orders.append(Order('AMETHYSTS', am_live_ask_price, am_additional_volume))
+                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_ask_volume)+3)
+                am_orders.append(Order('AMETHYSTS', am_live_ask_price+1, am_additional_volume))
                 self.am_remaining_quantity += am_additional_volume
             elif am_cur_position < 0 and am_live_bid_price > 10000:
-                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_bid_volume))
-                am_orders.append(Order('AMETHYSTS', am_live_bid_price, -am_additional_volume))
+                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_bid_volume)+3)
+                am_orders.append(Order('AMETHYSTS', am_live_bid_price-1, -am_additional_volume))
                 self.am_remaining_quantity += am_additional_volume
             if am_cur_position < 0 and (am_live_ask_price < 10000 or am_live_ask_price < self.am_latest_price):
                 am_order_quantity = min(abs(am_live_ask_volume)+3, 20+self.am_remaining_quantity)
