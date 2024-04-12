@@ -15,7 +15,6 @@ class Trader:
         self.star_cache = []
         self.star_poly_order = 8
         self.SMOOTHING = 0.98
-
         self.am_window_size = 34
         self.am_position_open = False
         self.am_position_type = None
@@ -79,12 +78,6 @@ class Trader:
                 orders.append(Order(product, bid, quantity)) if cum_sell_quant >= -20 else None
         
         self.position['STARFRUIT'] = cur_position
-
-        # undercut_buy = best_buy + 1
-        # undercut_sell = best_sell - 1
-
-        # bid_price = min(undercut_buy, acc_bid)
-        # ask_price = max(undercut_sell, acc_ask)
         
         return orders
     
@@ -92,14 +85,19 @@ class Trader:
         INF = int(1e9)
         conversions = 1
         result = {}
+        orders = {
+            'STARFRUIT': [],
+            'AMETHYSTS': []
+        }
 
         if state.traderData:
             saved_state = jsonpickle.decode(state.traderData)
+            # STARFRUIT
             self.position = saved_state.position
             self.star_cache = saved_state.star_cache
             self.star_poly_order = saved_state.star_poly_order
             self.SMOOTHING = saved_state.SMOOTHING
-
+            # AMETHYSTS
             self.am_window_size = saved_state.am_window_size
             self.am_position_open = saved_state.am_position_open
             self.am_position_type = saved_state.am_position_type
@@ -110,9 +108,12 @@ class Trader:
             self.am_partially_closed = saved_state.am_partially_closed
             self.am_latest_price = saved_state.am_latest_price
 
+        for product in state.order_depths:
+            self.position[product] = state.position.get(product, 0) # Update position
+
         # Ensure coefficients do not exceed 12, remove oldest mid_price if it does
         if len(self.star_cache) == self.star_poly_order:
-            removed = self.star_cache.pop(0)
+            self.star_cache.pop(0)
 
         # Get the best buy and sell prices
         star_best_sell = min(state.order_depths['STARFRUIT'].sell_orders.keys())
@@ -120,7 +121,6 @@ class Trader:
 
         # Update the cache with the new mid_price
         self.star_cache.append((star_best_sell + star_best_buy) / 2)
-
 
         star_band_lower = INF
         star_band_upper = INF
@@ -135,8 +135,7 @@ class Trader:
             print("Not enough data")
             star = False
 
-        star_orders = self.create_orders_regression('STARFRUIT', state.order_depths['STARFRUIT'], star_band_lower, star_band_upper, 20) if star else []
-        
+        star_orders = self.create_orders_regression('STARFRUIT', state.order_depths['STARFRUIT'], star_band_lower, star_band_upper, 19) if star else []
         result['STARFRUIT'] = star_orders
 
         if 'AMETHYSTS' in state.order_depths:
