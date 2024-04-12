@@ -149,9 +149,6 @@ class Trader:
                 self.am_latest_price = am_live_ask_price
                 self.am_remaining_quantity = am_open_order_volume
 
-
-
-
         elif am_cur_position != 0 and not self.am_partially_closed:
 
             if am_cur_position > 0 and am_live_ask_price < 10000:
