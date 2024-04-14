@@ -43,24 +43,20 @@ class Trader:
             self.position[product] = state.position.get(product, 0) # Update position
 
         # STARFRUIT
-        # Ensure STARFRUIT coefficients do not exceed 12, remove oldest mid_price if it does
         if len(self.star_cache) == self.star_window_size:
-            self.star_cache.pop(0)
-        # Get the best buy and sell prices for STARFRUIT
+            self.star_cache.pop(0)  # Remove the oldest price from the cache
         star_best_sell, star_best_buy = self.get_best_prices(state.order_depths['STARFRUIT'])
         self.star_cache.append((star_best_sell + star_best_buy) / 2)    # Append the mid price to the cache
 
         star_band_lower = INF
         star_band_upper = INF
-        star = True
-        
         if len(self.star_cache) == self.star_window_size:
             # Use predicted next price to determine acceptable bids and asks
             star_band_lower = self.calc_next_price_regression() - 1.0
             star_band_upper = self.calc_next_price_regression() + 1.0
             star_orders = self.create_orders_regression('STARFRUIT', state.order_depths['STARFRUIT'], star_band_lower, star_band_upper, 19)
         else:
-            print("Not enough data")
+            print("Not enough data for STARFRUIT.")
             star_orders = []
         result['STARFRUIT'] = star_orders
 
