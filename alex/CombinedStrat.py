@@ -21,6 +21,16 @@ class Trader:
         self.am_partially_closed = False
         self.am_latest_price = 0
     
+    # Returns best_ask, best_bid
+    # Or best ask, best ask volume, best bid, best bid volume
+    def get_best_prices(self, order_depth: OrderDepth, volumes = False):
+        if volumes:
+            best_ask, best_ask_volume = list(order_depth.sell_orders.items())[0]
+            best_bid, best_bid_volume = list(order_depth.buy_orders.items())[0]
+            return best_ask, best_ask_volume, best_bid, best_bid_volume
+        else:
+            return min(order_depth.sell_orders.keys()), max(order_depth.buy_orders.keys())
+    
     def filter(self, z: List) -> List:
             z_doubled = z
 
@@ -77,77 +87,30 @@ class Trader:
         
         return orders
     
-    def run(self, state: TradingState):
-        INF = int(1e9)
-        conversions = 1
-        result = {}
+    def open_order_high_frequency(self, best_bid, best_ask, best_bid_volume, best_ask_volume):
+        orders = []
+        if best_bid > 10000:
+            am_open_order_volume = min(abs(best_bid_volume)+3, 20)
+            orders.append(Order('AMETHYSTS', best_bid-1, -am_open_order_volume))
+            self.am_latest_price = best_bid
+            self.am_remaining_quantity = am_open_order_volume
+        elif best_ask < 10000:
+            am_open_order_volume = min(abs(best_ask_volume)+3, 20)
+            orders.append(Order('AMETHYSTS', best_ask+1, am_open_order_volume))
+            self.am_latest_price = best_ask
+            self.am_remaining_quantity = am_open_order_volume
+        return orders
+    
+    
+    
+    def create_orders_amethysts(self, am_order_depth):
 
-        if state.traderData:
-            saved_state = jsonpickle.decode(state.traderData)
-            # STARFRUIT
-            self.position = saved_state.position
-            self.star_cache = saved_state.star_cache
-            self.star_window_size = saved_state.star_window_size
-            self.SMOOTHING = saved_state.SMOOTHING
-            # AMETHYSTS
-            self.am_remaining_quantity = saved_state.am_remaining_quantity
-            self.am_partially_closed = saved_state.am_partially_closed
-            self.am_latest_price = saved_state.am_latest_price
-
-        for product in state.order_depths:
-            self.position[product] = state.position.get(product, 0) # Update position
-
-        # Ensure coefficients do not exceed 12, remove oldest mid_price if it does
-        if len(self.star_cache) == self.star_window_size:
-            self.star_cache.pop(0)
-
-        # Get the best buy and sell prices
-        star_best_sell = min(state.order_depths['STARFRUIT'].sell_orders.keys())
-        star_best_buy = max(state.order_depths['STARFRUIT'].buy_orders.keys())
-
-        # Update the cache with the new mid_price
-        self.star_cache.append((star_best_sell + star_best_buy) / 2)
-
-        star_band_lower = INF
-        star_band_upper = INF
-
-        star = True
-        # Use predicted next price to determine acceptable bids and asks
-        if len(self.star_cache) == self.star_window_size:
-            star_band_lower = self.calc_next_price() - 1.0
-            star_band_upper = self.calc_next_price() + 1.0
-
-        else:
-            print("Not enough data")
-            star = False
-
-        star_orders = self.create_orders_regression('STARFRUIT', state.order_depths['STARFRUIT'], star_band_lower, star_band_upper, 19) if star else []
-        result['STARFRUIT'] = star_orders
-
-
-        am_order_depth = state.order_depths['AMETHYSTS']
+        am_live_ask_price, am_live_ask_volume, am_live_bid_price, am_live_bid_volume = self.get_best_prices(am_order_depth, volumes=True)
         am_orders = []
         am_cur_position = self.position['AMETHYSTS']
 
-        if state.timestamp <= 2000:
-            return result, conversions, jsonpickle.encode(self)
-        
-
-        am_live_ask_price, am_live_ask_volume = list(am_order_depth.sell_orders.items())[0]
-        am_live_bid_price, am_live_bid_volume = list(am_order_depth.buy_orders.items())[0]
-
         if am_cur_position == 0:
-            if am_live_bid_price > 10000:
-                am_open_order_volume = min(abs(am_live_bid_volume)+3, 20)
-                am_orders.append(Order('AMETHYSTS', am_live_bid_price-1, -am_open_order_volume))
-                self.am_latest_price = am_live_bid_price
-                self.am_remaining_quantity = am_open_order_volume
-            elif am_live_ask_price < 10000:
-                am_open_order_volume = min(abs(am_live_ask_volume)+3, 20)
-                am_orders.append(Order('AMETHYSTS', am_live_ask_price+1, am_open_order_volume))
-                self.am_latest_price = am_live_ask_price
-                self.am_remaining_quantity = am_open_order_volume
-
+            am_orders = self.open_order_high_frequency(am_live_bid_price, am_live_ask_price, am_live_bid_volume, am_live_ask_volume)
         elif am_cur_position != 0 and not self.am_partially_closed:
 
             if am_cur_position > 0 and am_live_ask_price < 10000:
@@ -221,6 +184,62 @@ class Trader:
                     self.am_latest_price = am_live_bid_price
                     self.am_partially_closed = False
                     self.am_remaining_quantity = (am_order_quantity - self.am_remaining_quantity)
-        
+
+        return am_orders
+
+    
+    def run(self, state: TradingState):
+        INF = int(1e9)
+        conversions = 1
+        result = {}
+
+        if state.traderData:
+            saved_state = jsonpickle.decode(state.traderData)
+            # STARFRUIT
+            self.position = saved_state.position
+            self.star_cache = saved_state.star_cache
+            self.star_window_size = saved_state.star_window_size
+            self.SMOOTHING = saved_state.SMOOTHING
+            # AMETHYSTS
+            self.am_remaining_quantity = saved_state.am_remaining_quantity
+            self.am_partially_closed = saved_state.am_partially_closed
+            self.am_latest_price = saved_state.am_latest_price
+
+        for product in state.order_depths:
+            self.position[product] = state.position.get(product, 0) # Update position
+
+        # Ensure coefficients do not exceed 12, remove oldest mid_price if it does
+        if len(self.star_cache) == self.star_window_size:
+            self.star_cache.pop(0)
+
+        # Get the best buy and sell prices for STARFRUIT
+        star_best_sell, star_best_buy = self.get_best_prices(state.order_depths['STARFRUIT'])
+        # Update the cache with the new mid_price
+        self.star_cache.append((star_best_sell + star_best_buy) / 2)
+
+        star_band_lower = INF
+        star_band_upper = INF
+
+        star = True
+        # Use predicted next price to determine acceptable bids and asks
+        if len(self.star_cache) == self.star_window_size:
+            star_band_lower = self.calc_next_price() - 1.0
+            star_band_upper = self.calc_next_price() + 1.0
+
+        else:
+            print("Not enough data")
+            star = False
+
+        star_orders = self.create_orders_regression('STARFRUIT', state.order_depths['STARFRUIT'], star_band_lower, star_band_upper, 19) if star else []
+        result['STARFRUIT'] = star_orders
+
+
+        am_order_depth = state.order_depths['AMETHYSTS']
+
+        am_orders = []
+
+        if state.timestamp > 2000:
+            am_orders = self.create_orders_amethysts(am_order_depth)
+            
         result['AMETHYSTS'] = am_orders
         return result, conversions, jsonpickle.encode(self)
