@@ -42,32 +42,27 @@ class Trader:
         for product in state.order_depths:
             self.position[product] = state.position.get(product, 0) # Update position
 
-        # STARFRUIT
-        if len(self.star_cache) == self.star_window_size:
-            self.star_cache.pop(0)  # Remove the oldest price from the cache
-        star_best_sell, star_best_buy = self.get_best_prices(state.order_depths['STARFRUIT'])
-        self.star_cache.append((star_best_sell + star_best_buy) / 2)    # Append the mid price to the cache
+        if 'STARFRUIT' in state.order_depths:
+            if len(self.star_cache) == self.star_window_size:
+                self.star_cache.pop(0)  # Remove the oldest price from the cache
+            star_best_sell, star_best_buy = self.get_best_prices(state.order_depths['STARFRUIT'])
+            self.star_cache.append((star_best_sell + star_best_buy) / 2)    # Append the mid price to the cache
 
-        star_band_lower = INF
-        star_band_upper = INF
-        if len(self.star_cache) == self.star_window_size:
-            # Use predicted next price to determine acceptable bids and asks
-            star_band_lower = self.calc_next_price_regression() - 1.0
-            star_band_upper = self.calc_next_price_regression() + 1.0
-            star_orders = self.create_orders_regression('STARFRUIT', state.order_depths['STARFRUIT'], star_band_lower, star_band_upper, 19)
-        else:
-            print("Not enough data for STARFRUIT.")
-            star_orders = []
-        result['STARFRUIT'] = star_orders
+            star_band_lower = INF
+            star_band_upper = INF
+            if len(self.star_cache) == self.star_window_size:
+                # Use predicted next price to determine acceptable bids and asks
+                star_band_lower = self.calc_next_price_regression() - 1.0
+                star_band_upper = self.calc_next_price_regression() + 1.0
+                star_orders = self.create_orders_regression('STARFRUIT', state.order_depths['STARFRUIT'], star_band_lower, star_band_upper, 19)
+                result['STARFRUIT'] = star_orders
+            else:
+                print("Not enough data for STARFRUIT.")
 
-        # AMETHYSTS
-        if state.timestamp > 2000:
+        if 'AMETHYSTS' in state.order_depths and state.timestamp > 2000: 
             am_order_depth = state.order_depths['AMETHYSTS']
-            am_orders = []
             am_orders = self.create_orders_amethysts(am_order_depth)
-        else:
-            am_orders = []
-        result['AMETHYSTS'] = am_orders
+            result['AMETHYSTS'] = am_orders
 
         return result, conversions, jsonpickle.encode(self)
     
