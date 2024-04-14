@@ -20,6 +20,62 @@ class Trader:
         self.am_remaining_quantity = 0
         self.am_partially_closed = False
         self.am_latest_price = 0
+
+    def run(self, state: TradingState):
+        INF = int(1e9)
+        conversions = 1
+        result = {}
+
+        if state.traderData:
+            saved_state = jsonpickle.decode(state.traderData)
+            # STARFRUIT
+            self.position = saved_state.position
+            self.star_cache = saved_state.star_cache
+            self.star_window_size = saved_state.star_window_size
+            self.SMOOTHING = saved_state.SMOOTHING
+            # AMETHYSTS
+            self.am_remaining_quantity = saved_state.am_remaining_quantity
+            self.am_partially_closed = saved_state.am_partially_closed
+            self.am_latest_price = saved_state.am_latest_price
+
+        for product in state.order_depths:
+            self.position[product] = state.position.get(product, 0) # Update position
+
+        # Ensure coefficients do not exceed 12, remove oldest mid_price if it does
+        if len(self.star_cache) == self.star_window_size:
+            self.star_cache.pop(0)
+
+        # Get the best buy and sell prices for STARFRUIT
+        star_best_sell, star_best_buy = self.get_best_prices(state.order_depths['STARFRUIT'])
+        # Update the cache with the new mid_price
+        self.star_cache.append((star_best_sell + star_best_buy) / 2)
+
+        star_band_lower = INF
+        star_band_upper = INF
+
+        star = True
+        # Use predicted next price to determine acceptable bids and asks
+        if len(self.star_cache) == self.star_window_size:
+            star_band_lower = self.calc_next_price() - 1.0
+            star_band_upper = self.calc_next_price() + 1.0
+
+        else:
+            print("Not enough data")
+            star = False
+
+        star_orders = self.create_orders_regression('STARFRUIT', state.order_depths['STARFRUIT'], star_band_lower, star_band_upper, 19) if star else []
+        result['STARFRUIT'] = star_orders
+
+
+        am_order_depth = state.order_depths['AMETHYSTS']
+
+        am_orders = []
+
+        if state.timestamp > 2000:
+            am_orders = self.create_orders_amethysts(am_order_depth)
+            
+        result['AMETHYSTS'] = am_orders
+        return result, conversions, jsonpickle.encode(self)
     
     # Returns best_ask, best_bid
     # Or best ask, best ask volume, best bid, best bid volume
@@ -101,10 +157,86 @@ class Trader:
             self.am_remaining_quantity = am_open_order_volume
         return orders
     
+    def handle_not_partially_closed(self, product, current_position, ask_price, bid_price, ask_volume, bid_volume):
+
+        orders = []
+        if current_position > 0 and ask_price < 10000:
+            additional_volume = min(abs(20-self.am_remaining_quantity), abs(ask_volume)+3)
+            orders.append(Order(product, ask_price+1, additional_volume))
+            self.am_remaining_quantity += additional_volume
+        elif current_position < 0 and bid_price > 10000:
+            additional_volume = min(abs(20-self.am_remaining_quantity), abs(bid_volume)+3)
+            orders.append(Order(product, bid_price-1, -additional_volume))
+            self.am_remaining_quantity += additional_volume
+        if current_position < 0 and (ask_price < 10000 or ask_price < self.am_latest_price):
+            am_closing_volume = min(abs(ask_volume)+3, 20+self.am_remaining_quantity)
+            orders.append(Order(product, ask_price+1, am_closing_volume))
+            if self.am_remaining_quantity > am_closing_volume:
+                self.am_partially_closed = True
+                self.am_remaining_quantity -= am_closing_volume
+            elif self.am_remaining_quantity == am_closing_volume:
+                self.am_partially_closed = False
+                self.am_remaining_quantity -= am_closing_volume
+            elif self.am_remaining_quantity < am_closing_volume:
+                self.am_latest_price = ask_price
+                self.am_partially_closed = False
+                self.am_remaining_quantity = (am_closing_volume - self.am_remaining_quantity)
+                
+        elif current_position > 0 and (bid_price > 10000 or bid_price > self.am_latest_price):
+            am_closing_volume = min(abs(bid_volume)+3, 20+self.am_remaining_quantity)
+            orders.append(Order(product, bid_price-1, -am_closing_volume))
+            if self.am_remaining_quantity > am_closing_volume:
+                self.am_partially_closed = True
+                self.am_remaining_quantity -= am_closing_volume
+            elif self.am_remaining_quantity == am_closing_volume:
+                self.am_partially_closed = False
+                self.am_remaining_quantity -= am_closing_volume
+            elif self.am_remaining_quantity < am_closing_volume:
+                self.am_latest_price = bid_price
+                self.am_partially_closed = False
+                self.am_remaining_quantity = (am_closing_volume - self.am_remaining_quantity)
+
+        return orders
     
+    def handle_partially_closed(self, product, current_position, ask_price, bid_price, ask_volume, bid_volume):
+        orders = []
+        if current_position > 0 and ask_price < 10000:
+            am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(ask_volume)+3)
+            orders.append(Order(product, ask_price+1, am_additional_volume))
+            self.am_remaining_quantity += am_additional_volume
+        elif current_position < 0 and bid_price > 10000:
+            am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(bid_volume)+3)
+            orders.append(Order(product, bid_price-1, -am_additional_volume))
+            self.am_remaining_quantity += am_additional_volume
+        if current_position < 0 and (ask_price < 10000 or ask_price < self.am_latest_price):
+            am_order_quantity = min(abs(ask_volume)+3, 20+self.am_remaining_quantity)
+            orders.append(Order(product, ask_price+1, am_order_quantity))
+            if self.am_remaining_quantity > am_order_quantity:
+                self.am_partially_closed = True
+                self.am_remaining_quantity -= am_order_quantity
+            elif self.am_remaining_quantity == am_order_quantity:
+                self.am_partially_closed = False
+                self.am_remaining_quantity -= am_order_quantity
+            elif self.am_remaining_quantity < am_order_quantity:
+                self.am_latest_price = ask_price
+                self.am_partially_closed = False
+                self.am_remaining_quantity = (am_order_quantity - self.am_remaining_quantity)
+        elif current_position > 0 and (bid_price > 10000 or bid_price > self.am_latest_price):
+            am_order_quantity = min(abs(bid_volume)+3, 20+self.am_remaining_quantity)
+            orders.append(Order(product, bid_price-1, -am_order_quantity))
+            if self.am_remaining_quantity > am_order_quantity:
+                self.am_partially_closed = True
+                self.am_remaining_quantity -= am_order_quantity
+            elif self.am_remaining_quantity == am_order_quantity:
+                self.am_partially_closed = False
+                self.am_remaining_quantity -= am_order_quantity
+            elif self.am_remaining_quantity < am_order_quantity:
+                self.am_latest_price = bid_price
+                self.am_partially_closed = False
+                self.am_remaining_quantity = (am_order_quantity - self.am_remaining_quantity)
+        return orders
     
     def create_orders_amethysts(self, am_order_depth):
-
         am_live_ask_price, am_live_ask_volume, am_live_bid_price, am_live_bid_volume = self.get_best_prices(am_order_depth, volumes=True)
         am_orders = []
         am_cur_position = self.position['AMETHYSTS']
@@ -112,134 +244,11 @@ class Trader:
         if am_cur_position == 0:
             am_orders = self.open_order_high_frequency(am_live_bid_price, am_live_ask_price, am_live_bid_volume, am_live_ask_volume)
         elif am_cur_position != 0 and not self.am_partially_closed:
-
-            if am_cur_position > 0 and am_live_ask_price < 10000:
-                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_ask_volume)+3)
-                am_orders.append(Order('AMETHYSTS', am_live_ask_price+1, am_additional_volume))
-                self.am_remaining_quantity += am_additional_volume
-            elif am_cur_position < 0 and am_live_bid_price > 10000:
-                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_bid_volume)+3)
-                am_orders.append(Order('AMETHYSTS', am_live_bid_price-1, -am_additional_volume))
-                self.am_remaining_quantity += am_additional_volume
-            if am_cur_position < 0 and (am_live_ask_price < 10000 or am_live_ask_price < self.am_latest_price):
-                am_closing_volume = min(abs(am_live_ask_volume)+3, 20+self.am_remaining_quantity)
-                am_orders.append(Order('AMETHYSTS', am_live_ask_price+1, am_closing_volume))
-                if self.am_remaining_quantity > am_closing_volume:
-                    self.am_partially_closed = True
-                    self.am_remaining_quantity -= am_closing_volume
-                elif self.am_remaining_quantity == am_closing_volume:
-                    self.am_partially_closed = False
-                    self.am_remaining_quantity -= am_closing_volume
-                elif self.am_remaining_quantity < am_closing_volume:
-                    self.am_latest_price = am_live_ask_price
-                    self.am_partially_closed = False
-                    self.am_remaining_quantity = (am_closing_volume - self.am_remaining_quantity)
-                    
-            elif am_cur_position > 0 and (am_live_bid_price > 10000 or am_live_bid_price > self.am_latest_price):
-                am_closing_volume = min(abs(am_live_bid_volume)+3, 20+self.am_remaining_quantity)
-                am_orders.append(Order('AMETHYSTS', am_live_bid_price-1, -am_closing_volume))
-                if self.am_remaining_quantity > am_closing_volume:
-                    self.am_partially_closed = True
-                    self.am_remaining_quantity -= am_closing_volume
-                elif self.am_remaining_quantity == am_closing_volume:
-                    self.am_partially_closed = False
-                    self.am_remaining_quantity -= am_closing_volume
-                elif self.am_remaining_quantity < am_closing_volume:
-                    self.am_latest_price = am_live_bid_price
-                    self.am_partially_closed = False
-                    self.am_remaining_quantity = (am_closing_volume - self.am_remaining_quantity)
+            am_orders = self.handle_not_partially_closed('AMETHYSTS', am_cur_position, am_live_ask_price, am_live_bid_price, am_live_ask_volume, am_live_bid_volume)
                         
         elif am_cur_position != 0 and self.am_partially_closed:
-            if am_cur_position > 0 and am_live_ask_price < 10000:
-                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_ask_volume)+3)
-                am_orders.append(Order('AMETHYSTS', am_live_ask_price+1, am_additional_volume))
-                self.am_remaining_quantity += am_additional_volume
-            elif am_cur_position < 0 and am_live_bid_price > 10000:
-                am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(am_live_bid_volume)+3)
-                am_orders.append(Order('AMETHYSTS', am_live_bid_price-1, -am_additional_volume))
-                self.am_remaining_quantity += am_additional_volume
-            if am_cur_position < 0 and (am_live_ask_price < 10000 or am_live_ask_price < self.am_latest_price):
-                am_order_quantity = min(abs(am_live_ask_volume)+3, 20+self.am_remaining_quantity)
-                am_orders.append(Order('AMETHYSTS', am_live_ask_price+1, am_order_quantity))
-                if self.am_remaining_quantity > am_order_quantity:
-                    self.am_partially_closed = True
-                    self.am_remaining_quantity -= am_order_quantity
-                elif self.am_remaining_quantity == am_order_quantity:
-                    self.am_partially_closed = False
-                    self.am_remaining_quantity -= am_order_quantity
-                elif self.am_remaining_quantity < am_order_quantity:
-                    self.am_latest_price = am_live_ask_price
-                    self.am_partially_closed = False
-                    self.am_remaining_quantity = (am_order_quantity - self.am_remaining_quantity)
-            elif am_cur_position > 0 and (am_live_bid_price > 10000 or am_live_bid_price > self.am_latest_price):
-                am_order_quantity = min(abs(am_live_bid_volume)+3, 20+self.am_remaining_quantity)
-                am_orders.append(Order('AMETHYSTS', am_live_bid_price-1, -am_order_quantity))
-                if self.am_remaining_quantity > am_order_quantity:
-                    self.am_partially_closed = True
-                    self.am_remaining_quantity -= am_order_quantity
-                elif self.am_remaining_quantity == am_order_quantity:
-                    self.am_partially_closed = False
-                    self.am_remaining_quantity -= am_order_quantity
-                elif self.am_remaining_quantity < am_order_quantity:
-                    self.am_latest_price = am_live_bid_price
-                    self.am_partially_closed = False
-                    self.am_remaining_quantity = (am_order_quantity - self.am_remaining_quantity)
-
+            am_orders = self.handle_partially_closed('AMETHYSTS', am_cur_position, am_live_ask_price, am_live_bid_price, am_live_ask_volume, am_live_bid_volume)
         return am_orders
 
     
-    def run(self, state: TradingState):
-        INF = int(1e9)
-        conversions = 1
-        result = {}
 
-        if state.traderData:
-            saved_state = jsonpickle.decode(state.traderData)
-            # STARFRUIT
-            self.position = saved_state.position
-            self.star_cache = saved_state.star_cache
-            self.star_window_size = saved_state.star_window_size
-            self.SMOOTHING = saved_state.SMOOTHING
-            # AMETHYSTS
-            self.am_remaining_quantity = saved_state.am_remaining_quantity
-            self.am_partially_closed = saved_state.am_partially_closed
-            self.am_latest_price = saved_state.am_latest_price
-
-        for product in state.order_depths:
-            self.position[product] = state.position.get(product, 0) # Update position
-
-        # Ensure coefficients do not exceed 12, remove oldest mid_price if it does
-        if len(self.star_cache) == self.star_window_size:
-            self.star_cache.pop(0)
-
-        # Get the best buy and sell prices for STARFRUIT
-        star_best_sell, star_best_buy = self.get_best_prices(state.order_depths['STARFRUIT'])
-        # Update the cache with the new mid_price
-        self.star_cache.append((star_best_sell + star_best_buy) / 2)
-
-        star_band_lower = INF
-        star_band_upper = INF
-
-        star = True
-        # Use predicted next price to determine acceptable bids and asks
-        if len(self.star_cache) == self.star_window_size:
-            star_band_lower = self.calc_next_price() - 1.0
-            star_band_upper = self.calc_next_price() + 1.0
-
-        else:
-            print("Not enough data")
-            star = False
-
-        star_orders = self.create_orders_regression('STARFRUIT', state.order_depths['STARFRUIT'], star_band_lower, star_band_upper, 19) if star else []
-        result['STARFRUIT'] = star_orders
-
-
-        am_order_depth = state.order_depths['AMETHYSTS']
-
-        am_orders = []
-
-        if state.timestamp > 2000:
-            am_orders = self.create_orders_amethysts(am_order_depth)
-            
-        result['AMETHYSTS'] = am_orders
-        return result, conversions, jsonpickle.encode(self)
