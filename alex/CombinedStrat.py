@@ -24,7 +24,7 @@ class Trader:
     def run(self, state: TradingState):
         INF = int(1e9)
         conversions = 1
-        result = {}
+        result = defaultdict(list)
 
         if state.traderData:
             saved_state = jsonpickle.decode(state.traderData)
@@ -60,9 +60,7 @@ class Trader:
                 print("Not enough data for STARFRUIT.")
 
         if 'AMETHYSTS' in state.order_depths and state.timestamp > 2000: 
-            am_order_depth = state.order_depths['AMETHYSTS']
-            am_orders = self.create_orders_amethysts(am_order_depth)
-            result['AMETHYSTS'] = am_orders
+            result = self.execute_amethysts_trades(state.order_depths['AMETHYSTS'], result)
 
         return result, conversions, jsonpickle.encode(self)
 
@@ -236,7 +234,7 @@ class Trader:
                 self.am_remaining_quantity = (am_order_quantity - self.am_remaining_quantity)
         return orders
     
-    def create_orders_amethysts(self, am_order_depth):
+    def execute_amethysts_trades(self, am_order_depth, results):
         am_live_bid_price, am_live_bid_volume, am_live_ask_price, am_live_ask_volume = self.get_best_prices(am_order_depth)
         am_orders = []
         am_cur_position = self.position['AMETHYSTS']
@@ -244,11 +242,10 @@ class Trader:
         if am_cur_position == 0:
             am_orders = self.open_order_high_frequency(am_live_bid_price, am_live_ask_price, am_live_bid_volume, am_live_ask_volume)
         elif am_cur_position != 0 and not self.am_partially_closed:
-            am_orders = self.handle_not_partially_closed_high_frequency('AMETHYSTS', am_live_ask_price, am_live_bid_price, am_live_ask_volume, am_live_bid_volume)
-                        
+            am_orders = self.handle_not_partially_closed_high_frequency('AMETHYSTS', am_live_ask_price, am_live_bid_price, am_live_ask_volume, am_live_bid_volume)            
         elif am_cur_position != 0 and self.am_partially_closed:
             am_orders = self.handle_partially_closed_high_frequency('AMETHYSTS', am_live_ask_price, am_live_bid_price, am_live_ask_volume, am_live_bid_volume)
-        return am_orders
+        results['AMETHYSTS'] = am_orders
+        return results
 
-    
 
