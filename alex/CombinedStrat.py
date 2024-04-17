@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from datamodel import OrderDepth, TradingState, Order
 import collections
 from collections import defaultdict
@@ -45,7 +45,7 @@ class Trader:
         if 'STARFRUIT' in state.order_depths:
             if len(self.star_cache) == self.star_window_size:
                 self.star_cache.pop(0)  # Remove the oldest price from the cache
-            star_best_sell, star_best_buy = self.get_best_prices(state.order_depths['STARFRUIT'])
+            star_best_buy, bv, star_best_sell, sv = self.get_best_prices(state.order_depths['STARFRUIT'])
             self.star_cache.append((star_best_sell + star_best_buy) / 2)    # Append the mid price to the cache
 
             star_band_lower = INF
@@ -65,16 +65,22 @@ class Trader:
             result['AMETHYSTS'] = am_orders
 
         return result, conversions, jsonpickle.encode(self)
-    
-    # Returns best_ask, best_bid
-    # Or best ask, best ask volume, best bid, best bid volume
-    def get_best_prices(self, order_depth: OrderDepth, volumes = False):
-        if volumes:
-            best_ask, best_ask_volume = list(order_depth.sell_orders.items())[0]
-            best_bid, best_bid_volume = list(order_depth.buy_orders.items())[0]
-            return best_ask, best_ask_volume, best_bid, best_bid_volume
+
+    def get_best_prices(self, order_depth: OrderDepth) -> Tuple[int, int, int, int]:
+        if order_depth.buy_orders:
+            best_bid = max(order_depth.buy_orders.keys(), default=0)
+            best_bid_volume = order_depth.buy_orders.get(best_bid, 0)
         else:
-            return min(order_depth.sell_orders.keys()), max(order_depth.buy_orders.keys())
+            best_bid = 0
+            best_bid_volume = 0
+        if order_depth.sell_orders:
+            best_ask = min(order_depth.sell_orders.keys(), default=float('inf'))
+            best_ask_volume = order_depth.sell_orders.get(best_ask, 0)
+        else:
+            best_ask = float('inf')
+            best_ask_volume = 0
+
+        return best_bid, best_bid_volume, best_ask, best_ask_volume
     
     def smooth_data(self, z: List, SMOOTHING) -> List:
             z_doubled = z
@@ -227,7 +233,7 @@ class Trader:
         return orders
     
     def create_orders_amethysts(self, am_order_depth):
-        am_live_ask_price, am_live_ask_volume, am_live_bid_price, am_live_bid_volume = self.get_best_prices(am_order_depth, volumes=True)
+        am_live_bid_price, am_live_bid_volume, am_live_ask_price, am_live_ask_volume = self.get_best_prices(am_order_depth)
         am_orders = []
         am_cur_position = self.position['AMETHYSTS']
 
