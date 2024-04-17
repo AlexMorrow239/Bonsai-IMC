@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Union, Any, Tuple
 from datamodel import OrderDepth, TradingState, Order
 import collections
 from collections import defaultdict
@@ -17,9 +17,11 @@ class Trader:
         self.basket_mid_prices = {'CHOCOLATE': [], 'STRAWBERRIES': [], 'ROSES': [], 'GIFT_BASKET': []}
         self.spread = []
         self.basket_components = {'CHOCOLATE': 4, 'STRAWBERRIES': 6, 'ROSES': 1, 'GIFT_BASKET': 1} # Components of one basket and the corresponding proportions
+        self.partially_closed = False
+        self.position_type = None
 
 
-    def get_best_prices(self, order_depth):
+    def get_best_prices(self, order_depth: OrderDepth) -> Tuple[int, int, int, int]:
         if order_depth.buy_orders:
             best_bid = max(order_depth.buy_orders.keys(), default=0)
             best_bid_volume = order_depth.buy_orders.get(best_bid, 0)
@@ -36,7 +38,7 @@ class Trader:
 
         return best_bid, best_bid_volume, best_ask, best_ask_volume
 
-    def calculate_component_cost(self, prices):
+    def calculate_component_cost(self, prices: Dict[str, Dict[str, int]]) -> Tuple[int, int]:
         components = ['CHOCOLATE', 'STRAWBERRIES', 'ROSES']
         quantities = [4, 6, 1]  # Example quantities needed for a basket
         total_cost = 0
@@ -58,7 +60,7 @@ class Trader:
 
         return total_cost, min_volume_supported
     
-    def calculate_unit_volume(self, prices):
+    def calculate_unit_volume(self, prices: Dict[str, Dict[str, int]]) -> Tuple[Dict[str, int], Dict[str, int] ]:
 
         can_buy = can_sell = False  # Flags to check if all components can be bought/sold
         # Initialize dictionaries to store the number of units to trade for each product, and the volume of each product to trade based on the quantity of product in one unit of the basket
@@ -161,7 +163,7 @@ class Trader:
                 
         return product_buy_volume, product_sell_volume
 
-    def check_arbitrage_opportunity(self, prices):
+    def check_arbitrage_opportunity(self, prices: Dict[str, Dict[str, int]]) -> Tuple[bool, List[Dict[str, Union[int, str]]]]:
         # Calculate the volume of each product to trade based on the quantity of product in one unit of the basket and the available volumes
         product_buy_volume, product_sell_volume = self.calculate_unit_volume(prices)
         can_buy = all(product_buy_volume[product] != 0 for product in product_buy_volume.keys())
@@ -177,6 +179,7 @@ class Trader:
         
             if self.spread[-1] > upper_band and self.position['GIFT_BASKET'] == 0 and can_buy:
                 # sell 1 basket / buy 4 chocolate, 6 strawberries, 1 rose
+                # upper open
                 aribtrage_details.append({
                     'action': 'sell',
                     'product': 'GIFT_BASKET',
@@ -201,6 +204,7 @@ class Trader:
                 
             elif self.spread[-1] < lower_band and self.position['GIFT_BASKET'] == 0 and can_sell:
                 # buy 1 basket / sell 4 chocolate, 6 strawberries, 1 rose
+                # lower open
                 aribtrage_details.append({
                     'action': 'buy',
                     'product': 'GIFT_BASKET',
@@ -224,57 +228,79 @@ class Trader:
                 arbitrage = True
             elif self.spread[-1] < lower_band and self.spread[-1] > lower_band and self.position['GIFT_BASKET'] < 0 and can_sell:
                 # buy 1 basket / sell 4 chocolate, 6 strawberries, 1 rose
+                # upper close
                 aribtrage_details.append({
                     'action': 'buy',
                     'product': 'GIFT_BASKET',
-                    'quantity': product_sell_volume['GIFT_BASKET']
+                    'quantity': -1 * (max(prices['GIFT_BASKET']['ask_volume'], self.position['GIFT_BASKET']))
                 })
                 aribtrage_details.append({
                     'action': 'sell',
                     'product': 'CHOCOLATE',
-                    'quantity': (-1 * product_sell_volume['CHOCOLATE'])
+                    'quantity': -1 * (min((prices['CHOCOLATE']['bid_volume']), self.position['CHOCOLATE']))
                 })
                 aribtrage_details.append({
                     'action': 'sell',
                     'product': 'STRAWBERRIES',
-                    'quantity': (-1 * product_sell_volume['STRAWBERRIES'])
+                    'quantity': -1 * (min((prices['STRAWBERRIES']['bid_volume']), self.position['STRAWBERRIES']))
                 })
                 aribtrage_details.append({
                     'action': 'sell',
                     'product': 'ROSES',
-                    'quantity': (-1 * product_sell_volume['ROSES'])
+                    'quantity': -1 * (min((prices['ROSES']['bid_volume']), self.position['ROSES']))
                 })
                 arbitrage = True
+                self.partially_closed = True
             elif self.spread[-1] > upper_band and self.spread[-1] < upper_band and self.position['GIFT_BASKET'] > 0 and can_buy:
                 # sell 1 basket / buy 4 chocolate, 6 strawberries, 1 rose
+                # lower close
                 aribtrage_details.append({
                     'action': 'sell',
                     'product': 'GIFT_BASKET',
-                    'quantity': (-1 * product_buy_volume['GIFT_BASKET'])
+                    'quantity': -1 * (min((prices['GIFT_BASKET']['bid_volume']), self.position['GIFT_BASKET']))
                 })
                 aribtrage_details.append({
                     'action': 'buy',
                     'product': 'CHOCOLATE',
-                    'quantity': product_buy_volume['CHOCOLATE']
+                    'quantity': -1 * max(prices['CHOCOLATE']['ask_volume'], self.position['CHOCOLATE'])
                 })
                 aribtrage_details.append({
                     'action': 'buy',
                     'product': 'STRAWBERRIES',
-                    'quantity': product_buy_volume['STRAWBERRIES']
+                    'quantity': -1 * max(prices['STRAWBERRIES']['ask_volume'], self.position['STRAWBERRIES'])
                 })
                 aribtrage_details.append({
                     'action': 'buy',
                     'product': 'ROSES',
-                    'quantity': product_buy_volume['ROSES']
+                    'quantity': -1 * max(prices['ROSES']['ask_volume'], self.position['ROSES'])
                 })
                 arbitrage = True
-            
+                self.partially_closed = True            
         else:
             print("Not enough data points to calculate spread statistics.")
 
         return arbitrage, aribtrage_details
 
-    def execute_basket_trades(self, state, results):
+    def handle_partial_close(self, state: TradingState, prices: Dict[str, Dict[str, int]], results: Dict[str, List[Order]]) -> Dict[str, List[Order]]:
+        if self.partially_closed and all(self.position[product] == 0 for product in self.basket_components.keys()):
+            self.partially_closed = False
+            self.position_type = None
+        
+        elif self.partially_closed:
+            for product in self.basket_components.keys():
+                if self.position[product] > 0:
+                    quantity = -1 * min(self.position[product], prices[product]['bid_volume'])
+                    assert (quantity < 0), f"Quantity {quantity} not less than 0 for {product} at {state.timestamp}"
+                    prod_order = Order(product, prices[product]['bid'], quantity)
+                elif self.position[product] < 0:
+                    quantity = -1 * max(self.position[product], prices[product]['ask_volume'])
+                    assert (quantity > 0), f"Quantity {quantity} not greater than 0 for {product} at {state.timestamp}"
+                    prod_order = Order(product, prices[product]['ask'], quantity)                
+                results[product].append(prod_order)
+        return results
+
+
+    def execute_basket_trades(self, state: TradingState, results: Dict[str, List[Order]]) ->Tuple[Dict[str, List[Order]], int, Any | None]:
         orders = []
         prices = {}
 
@@ -290,37 +316,35 @@ class Trader:
         for product in self.basket_mid_prices:
             self.basket_mid_prices[product].append(prices[product]['mid'])
 
-        # Check if the required volume of all instruments is the minimum required (1 basket, 1 rose, 4 chocolate, 6 strawberry)
-        if prices['GIFT_BASKET']['bid_volume'] < 1 or prices['ROSES']['ask_volume'] > -1 or prices['CHOCOLATE']['ask_volume'] > -4 or prices['STRAWBERRIES']['ask_volume'] > -6:
-            print("Required volume of all instruments is not met. No trades executed.")
-            return orders
+        # Check if the basket is partially closed and handle it
+        results = self.handle_partial_close(state, prices, results)
 
         # Check for arbitrage opportunity
         arbitrage, details = self.check_arbitrage_opportunity(prices)
-        if arbitrage:
-            for detail in details:
-                action = detail['action']
-                product = detail['product']
-                quantity = detail['quantity']
-                if action == 'sell':
-                    prod_order = self.place_order(product, prices[product]['bid'], -quantity)
-                    assert (quantity % self.basket_components[product] == 0), f"Quantity {quantity} not a multiple of {self.basket_components[product]}"
-                    print(f"SELLING {quantity} {product} at {prices[product]['bid']}")
-                    results[product] = prod_order       
-                elif action == 'buy':
-                    prod_order = self.place_order(product, prices[product]['ask'], quantity)
-                    assert (quantity % self.basket_components[product] == 0), f"Quantity {quantity} not a multiple of {self.basket_components[product]} for {product} at {state.timestamp}"
-                    results[product] = prod_order
-        else:
-            print("No arbitrage opportunity found; no trades executed.")
+        if  not arbitrage:
+            print("No arbitrage opportunity detected.")
+            return []
         
+        for detail in details:
+            action = detail['action']
+            product = detail['product']
+            quantity = detail['quantity']
+            if action == 'sell':
+                prod_order = self.place_order(product, prices[product]['bid'], -quantity)
+                assert (quantity % self.basket_components[product] == 0), f"Quantity {quantity} not a multiple of {self.basket_components[product]}"
+                print(f"SELLING {quantity} {product} at {prices[product]['bid']}") 
+            elif action == 'buy':
+                prod_order = self.place_order(product, prices[product]['ask'], quantity)
+                assert (quantity % self.basket_components[product] == 0), f"Quantity {quantity} not a multiple of {self.basket_components[product]} for {product} at {state.timestamp}"
+            results[product].append(prod_order)
+
         print("Summary of positions after trade execution:")
         for product, qty in self.position.items():
             print(f"{product}: {qty}")
         return orders
 
-    def place_order(self, product, price, quantity):
-        orders = []
+    def place_order(self, product: str, price: Dict[str, Dict[str, int]], quantity: int) -> List[Order]:
+        order = None
         current_position = self.position[product]
         LIMIT = self.position_limits[product]
         if quantity > 0:  # Buying
@@ -330,15 +354,16 @@ class Trader:
             available_capacity = -LIMIT - current_position
             quantity_to_order = max(quantity, available_capacity, -LIMIT)  # Ensure not selling more than held
 
-        orders.append(Order(product, price, quantity_to_order))
+        order = Order(product, price, quantity_to_order)
+        assert (order is not None), f"Order not placed for {product} at {price} and quantity {quantity_to_order}"
         self.position[product] += quantity_to_order
         print(f'BOUGHT {quantity_to_order} {product} at {price} (current position: {self.position[product]})') if quantity_to_order > 0 else print(f'SOLD {quantity_to_order} {product} at {price} (current position: {self.position[product]})')
-        return orders
+        return order
 
     def run(self, state: TradingState):
         INF = int(1e9)
         conversions = 1
-        result = {}
+        results = defaultdict(list)
 
         if state.traderData:
             # Decode the saved state
@@ -349,6 +374,7 @@ class Trader:
             self.spread = saved_state.spread
             self.basket_mid_prices = saved_state.basket_mid_prices
             self.basket_components = saved_state.basket_components
+            self.partially_closed = saved_state.partially_closed
 
         # Update positions based on the current state and ensure it is valid
         for product in state.order_depths:
@@ -359,6 +385,6 @@ class Trader:
             assert(self.position[product] % unit == 0), f"Position of {product} not a multiple of {unit} at {state.timestamp}"
 
         if all(item in state.order_depths for item in ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']):
-            self.execute_basket_trades(state, result)
+            self.execute_basket_trades(state, results)
         
-        return result, conversions, jsonpickle.encode(self)
+        return results, conversions, jsonpickle.encode(self)
