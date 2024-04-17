@@ -146,16 +146,19 @@ class Trader:
             orders.append(Order('AMETHYSTS', best_bid-1, -am_open_order_volume))
             self.am_latest_price = best_bid
             self.am_remaining_quantity = am_open_order_volume
+            self.position['AMETHYSTS'] -= am_open_order_volume
         elif best_ask < 10000:
             am_open_order_volume = min(abs(best_ask_volume)+3, 20)
             orders.append(Order('AMETHYSTS', best_ask+1, am_open_order_volume))
             self.am_latest_price = best_ask
             self.am_remaining_quantity = am_open_order_volume
+            self.position['AMETHYSTS'] += am_open_order_volume
         return orders
     
-    def handle_not_partially_closed_high_frequency(self, product, current_position, ask_price, bid_price, ask_volume, bid_volume):
+    def handle_not_partially_closed_high_frequency(self, product, ask_price, bid_price, ask_volume, bid_volume):
 
         orders = []
+        current_position = self.position[product]
         if current_position > 0 and ask_price < 10000:
             additional_volume = min(abs(20-self.am_remaining_quantity), abs(ask_volume)+3)
             orders.append(Order(product, ask_price+1, additional_volume))
@@ -194,8 +197,9 @@ class Trader:
 
         return orders
     
-    def handle_partially_closed_high_frequency(self, product, current_position, ask_price, bid_price, ask_volume, bid_volume):
+    def handle_partially_closed_high_frequency(self, product, ask_price, bid_price, ask_volume, bid_volume):
         orders = []
+        current_position = self.position[product]
         if current_position > 0 and ask_price < 10000:
             am_additional_volume = min(abs(20-self.am_remaining_quantity), abs(ask_volume)+3)
             orders.append(Order(product, ask_price+1, am_additional_volume))
@@ -240,10 +244,10 @@ class Trader:
         if am_cur_position == 0:
             am_orders = self.open_order_high_frequency(am_live_bid_price, am_live_ask_price, am_live_bid_volume, am_live_ask_volume)
         elif am_cur_position != 0 and not self.am_partially_closed:
-            am_orders = self.handle_not_partially_closed_high_frequency('AMETHYSTS', am_cur_position, am_live_ask_price, am_live_bid_price, am_live_ask_volume, am_live_bid_volume)
+            am_orders = self.handle_not_partially_closed_high_frequency('AMETHYSTS', am_live_ask_price, am_live_bid_price, am_live_ask_volume, am_live_bid_volume)
                         
         elif am_cur_position != 0 and self.am_partially_closed:
-            am_orders = self.handle_partially_closed_high_frequency('AMETHYSTS', am_cur_position, am_live_ask_price, am_live_bid_price, am_live_ask_volume, am_live_bid_volume)
+            am_orders = self.handle_partially_closed_high_frequency('AMETHYSTS', am_live_ask_price, am_live_bid_price, am_live_ask_volume, am_live_bid_volume)
         return am_orders
 
     
