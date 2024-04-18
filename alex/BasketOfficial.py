@@ -18,7 +18,6 @@ class Trader:
         self.spread = []
         self.basket_components = {'CHOCOLATE': 4, 'STRAWBERRIES': 6, 'ROSES': 1, 'GIFT_BASKET': 1} # Components of one basket and the corresponding proportions
         self.partially_closed = False
-        self.position_type = None
 
 
     def get_best_prices(self, order_depth: OrderDepth) -> Tuple[int, int, int, int]:
@@ -28,7 +27,6 @@ class Trader:
         else:
             best_bid = 0
             best_bid_volume = 0
-
         if order_depth.sell_orders:
             best_ask = min(order_depth.sell_orders.keys(), default=float('inf'))
             best_ask_volume = order_depth.sell_orders.get(best_ask, 0)
@@ -201,6 +199,7 @@ class Trader:
                     'quantity': product_buy_volume['ROSES']
                 })
                 arbitrage = True
+                self.partially_closed = False
                 
             elif self.spread[-1] < lower_band and self.position['GIFT_BASKET'] == 0 and can_sell:
                 # buy 1 basket / sell 4 chocolate, 6 strawberries, 1 rose
@@ -226,6 +225,7 @@ class Trader:
                     'quantity': (-1 * product_sell_volume['ROSES'])
                 })
                 arbitrage = True
+                self.partially_closed = False
             elif self.spread[-1] < lower_band and self.spread[-1] > lower_band and self.position['GIFT_BASKET'] < 0 and can_sell:
                 # buy 1 basket / sell 4 chocolate, 6 strawberries, 1 rose
                 # upper close
@@ -284,7 +284,6 @@ class Trader:
     def handle_partial_close(self, state: TradingState, prices: Dict[str, Dict[str, int]], results: Dict[str, List[Order]]) -> Dict[str, List[Order]]:
         if self.partially_closed and all(self.position[product] == 0 for product in self.basket_components.keys()):
             self.partially_closed = False
-            self.position_type = None
         
         elif self.partially_closed:
             for product in self.basket_components.keys():
@@ -384,7 +383,7 @@ class Trader:
         for product, unit in self.basket_components.items():
             assert(self.position[product] % unit == 0), f"Position of {product} not a multiple of {unit} at {state.timestamp}"
 
-        if all(item in state.order_depths for item in ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']):
+        if all(item in state.order_depths for item in self.basket_components.keys()):
             self.execute_basket_trades(state, results)
         
         return results, conversions, jsonpickle.encode(self)
